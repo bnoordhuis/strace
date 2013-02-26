@@ -800,6 +800,8 @@ umoven(struct tcb *tcp, long addr, int len, char *laddr)
 				remote, 1,
 				/*flags:*/ 0
 		);
+		if (r == len)
+			return 0;
 		if (r < 0) {
 			if (errno == ENOSYS)
 				process_vm_readv_not_supported = 1;
@@ -807,11 +809,8 @@ umoven(struct tcb *tcp, long addr, int len, char *laddr)
 				/* EINVAL or ESRCH could be seen if process is gone,
 				 * all the rest is strange and should be reported. */
 				perror_msg("%s", "process_vm_readv");
-			goto vm_readv_didnt_work;
 		}
-		return r;
 	}
- vm_readv_didnt_work:
 
 	started = 0;
 	if (addr & (sizeof(long) - 1)) {
