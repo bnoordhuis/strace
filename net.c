@@ -2301,6 +2301,49 @@ static void printicmpfilter(struct tcb *tcp, long addr)
 }
 #endif /* ICMP_FILTER */
 
+#if defined(IP_ADD_MEMBERSHIP) || defined(IP_DROP_MEMBERSHIP)
+static void printmreq(struct tcb *tcp, long addr, int len)
+{
+	struct ip_mreq mreq;
+	if (len == sizeof(mreq) && umove(tcp, addr, &mreq) == 0) {
+		tprintf("{imr_multiaddr=inet_addr(\"%s\"),",
+			inet_ntoa(mreq.imr_multiaddr));
+		tprintf(" imr_interface=inet_addr(\"%s\")}",
+			inet_ntoa(mreq.imr_interface));
+	}
+	else {
+		printstr(tcp, addr, len);
+	}
+}
+#endif /* defined(IP_ADD_MEMBERSHIP) || defined(IP_DROP_MEMBERSHIP) */
+
+#if defined(IPV6_ADD_MEMBERSHIP) || defined(IPV6_DROP_MEMBERSHIP)
+static void printmreq6(struct tcb *tcp, long addr, int len)
+{
+#if HAVE_INET_NTOP
+	struct ipv6_mreq mreq;
+	const struct in6_addr *in6;
+	char text[INET6_ADDRSTRLEN];
+
+	if (len != sizeof(mreq))
+		goto fail;
+
+	if (umove(tcp, addr, &mreq) < 0)
+		goto fail;
+
+	in6 = &mreq.ipv6mr_multiaddr;
+	if (inet_ntop(AF_INET6, in6, text, sizeof(text)) != text)
+		goto fail;
+
+	tprintf("{ipv6mr_multiaddr=inet_ntop(\"%s\"), ipv6mr_interface=%d}",
+		text, mreq.ipv6mr_interface);
+	return;
+fail:
+#endif /* HAVE_INET_NTOP */
+	printstr(tcp, addr, len);
+}
+#endif /* defined(IPV6_ADD_MEMBERSHIP) || defined(IPV6_DROP_MEMBERSHIP) */
+
 static int
 printsockopt(struct tcb *tcp, int level, int name, long addr, int len)
 {
@@ -2327,7 +2370,34 @@ printsockopt(struct tcb *tcp, int level, int name, long addr, int len)
 		break;
 #ifdef SOL_IP
 	case SOL_IP:
-		printxval(sockipoptions, name, "IP_???");
+		switch (name) {
+#ifdef IP_ADD_MEMBERSHIP
+			case IP_ADD_MEMBERSHIP:
+				tprints("IP_ADD_MEMBERSHIP, ");
+				printmreq(tcp, addr, len);
+				return 0;
+#endif
+#ifdef IP_DROP_MEMBERSHIP
+			case IP_DROP_MEMBERSHIP:
+				tprints("IP_DROP_MEMBERSHIP, ");
+				printmreq(tcp, addr, len);
+				return 0;
+#endif
+#ifdef IPV6_ADD_MEMBERSHIP
+			case IPV6_ADD_MEMBERSHIP:
+				tprints("IPV6_ADD_MEMBERSHIP, ");
+				printmreq6(tcp, addr, len);
+				return 0;
+#endif
+#ifdef IPV6_DROP_MEMBERSHIP
+			case IPV6_DROP_MEMBERSHIP:
+				tprints("IPV6_DROP_MEMBERSHIP, ");
+				printmreq6(tcp, addr, len);
+				return 0;
+#endif
+			default:
+				printxval(sockipoptions, name, "IP_???");
+		}
 		break;
 #endif
 #ifdef SOL_IPV6
